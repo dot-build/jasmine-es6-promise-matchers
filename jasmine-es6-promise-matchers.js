@@ -14,7 +14,6 @@
 (typeof window === 'undefined' ? global : window).JasminePromiseMatchers = new function() {
 
   var windowOrGlobal = typeof window === 'undefined' ? global : window;
-
   var OriginalPromise;
 
   /**
@@ -47,7 +46,7 @@
     return value.asymmetricMatch instanceof Function;
   }
 
-  var verifyData = function(actualData, expectedData) {
+  var verifyData = function(actualData, expectedData, isNegative) {
     if (expectedData === undefined) {
       return { pass: true };
     }
@@ -57,38 +56,67 @@
         expectedData = String(expectedData);
     }
 
+    var state;
+
     if (isAsymmetric(expectedData)) {
-      return {
+      state = {
         pass: expectedData.asymmetricMatch(actualData),
-        message: 'Expected "' + actualData + '" to contain "' + expectedData + '"'
+        message: 'Expected "' + actualData + '"' + (isNegative ? ' not' : '') + ' to contain "' + expectedData + '"'
+      };
+    } else {
+      state = {
+        pass: actualData === expectedData,
+        message: 'Expected "' + actualData + '"' + (isNegative ? ' not' : '') + ' to be "' + expectedData + '"'
       };
     }
 
-    return {
-      pass: actualData === expectedData,
-      message: 'Expected "' + actualData + '" to be "' + expectedData + '"'
-    };
+    if (isNegative) {
+      state.pass = !state.pass;
+    }
+
+    return state;
   };
 
-  var verifyState = function(actualState, expectedState) {
-    return {
+  var verifyState = function(actualState, expectedState, isNegative) {
+    const state = {
       pass: actualState === expectedState,
-      message: 'Expected promise to be ' + expectedState + ' but it was ' + actualState + ' instead'
+      message: 'Expected promise ' + (isNegative ? 'not ' : '') + 'to be ' + expectedState
     };
+
+    if (isNegative) {
+      state.pass = !state.pass;
+    }
+
+    return state;
+  };
+
+  var noop = function() {};
+  noop.fail = function () {
+    throw new Error('Failed');
   };
 
   // Helper method to verify expectations and return a Jasmine-friendly info-object
   var verifyPromiseExpectations = function(done, promise, expectedState, expectedData, isNegative) {
+    done = done || noop;
     function verify(promiseState) {
       return function(data) {
-        var test = verifyState(promiseState, expectedState);
+        var testData;
+        var testState = verifyState(promiseState, expectedState, isNegative);
 
-        if (test.pass) {
-          test = verifyData(data, expectedData);
+        var failed;
+        var message;
+
+        if (!testState.pass) {
+          failed = true;
+          message = testState.message;
+        } else {
+          testData = verifyData(data, expectedData, isNegative);
+          failed = !testData.pass && !isNegative;
+          message = testData.message;
         }
 
-        if (!test.pass && !isNegative) {
-          done.fail(new Error(test.message));
+        if (failed) {
+          done.fail(message);
           return;
         }
 
@@ -106,39 +134,41 @@
 
   // Install the matchers
   beforeEach(function() {
+    function createMatcher(state, compareData) {
+      function matcher(isNegative) {
+        if (compareData) {
+          return function (promise, expectedData, done) {
+            return verifyPromiseExpectations(done, promise, state, expectedData, isNegative);
+          }
+        }
+
+        return function (promise, done) {
+          return verifyPromiseExpectations(done, promise, state, undefined, isNegative);
+        }
+      }
+
+      var positive = matcher(false);
+      var negative = matcher(true);
+
+      return {
+        compare: positive,
+        negativeCompare: negative
+      };
+    }
+
     jasmine.addMatchers({
       toBeRejected: function() {
-        return {
-          compare: function(promise, done) {
-            return verifyPromiseExpectations(done, promise, PROMISE_STATE.REJECTED);
-          }
-        };
+        return createMatcher(PROMISE_STATE.REJECTED);
       },
       toBeRejectedWith: function() {
-        return {
-          compare: function(promise, expectedData, done) {
-            return verifyPromiseExpectations(done, promise, PROMISE_STATE.REJECTED, expectedData);
-          },
-
-          negativeCompare: function (promise, expectedData, done) {
-            return verifyPromiseExpectations(done, promise, PROMISE_STATE.REJECTED, expectedData, true);
-          }
-        };
+        return createMatcher(PROMISE_STATE.REJECTED, true);
       },
       toBeResolved: function() {
-        return {
-          compare: function(promise, done) {
-            return verifyPromiseExpectations(done, promise, PROMISE_STATE.RESOLVED);
-          }
-        };
+        return createMatcher(PROMISE_STATE.RESOLVED);
       },
       toBeResolvedWith: function() {
-        return {
-          compare: function(promise, expectedData, done) {
-            return verifyPromiseExpectations(done, promise, PROMISE_STATE.RESOLVED, expectedData);
-          }
-        };
-      }
+        return createMatcher(PROMISE_STATE.RESOLVED, true);
+      },
     });
   });
 }();

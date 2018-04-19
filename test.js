@@ -72,12 +72,48 @@ describe('JasminePromiseMatchers', function () {
       }
     });
 
+    it('should recognized negative of rejected promise state', function(done) {
+      if (completeBefore) {
+        resolve();
+      }
+
+      expect(promise).not.toBeRejected(done);
+
+      if (!completeBefore) {
+        resolve();
+      }
+    });
+
+    it('should recognized negative of resolved promise state', function(done) {
+      if (completeBefore) {
+        reject();
+      }
+
+      expect(promise).not.toBeResolved(done);
+
+      if (!completeBefore) {
+        reject();
+      }
+    });
+
     it('should recognized rejected promises with expected arguments', function(done) {
       if (completeBefore) {
         reject('foobar');
       }
 
       expect(promise).toBeRejectedWith('foobar', done);
+
+      if (!completeBefore) {
+        reject('foobar');
+      }
+    });
+
+    it('should recognized negative of rejected promises with expected arguments', function(done) {
+      if (completeBefore) {
+        reject('foobar');
+      }
+
+      expect(promise).not.toBeResolvedWith('foobar', done);
 
       if (!completeBefore) {
         reject('foobar');
@@ -131,20 +167,18 @@ describe('JasminePromiseMatchers', function () {
         resolve(result);
       }
     });
+  });
 
-    it('should recognize rejected promises with distinct error messages', function(done) {
-      var rejection = new Error('Some error');
+  it('should allow multiple assertions', function(done) {
+    var value = 234;
+    var rejection = new Error('Some error');
 
-      if (completeBefore) {
-        reject(rejection);
-      }
+    const resolved = Promise.resolve(value);
+    const rejected = Promise.reject(rejection);
 
-      var errorMatcher = new Error('Error message');
-      expect(promise).not.toBeRejectedWith(errorMatcher, done);
+    expect(resolved).toBeResolvedWith(value);
+    expect(rejected).toBeRejectedWith('foo');
 
-      if (!completeBefore) {
-        reject(rejection);
-      }
-    });
+    setTimeout(done, 5);
   });
 });
